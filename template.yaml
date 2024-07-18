@@ -1,0 +1,448 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template for the Three-Tier-Web-Application project
+
+Parameters:
+  FrontEndBucketName:
+    Type: String
+    Description: The name of the S3 bucket for the front-end website.
+    Default: frontend
+
+Resources:
+
+  ######################################
+  #             CloudFront             #
+  ######################################
+
+  CDNOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: CDNOriginAccessControleForS3
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  CachingOptimizedCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        DefaultTTL: 86400
+        MaxTTL: 31536000
+        MinTTL: 1
+        Name: CachingOptimized
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: none
+          HeadersConfig:
+            HeaderBehavior: none
+          QueryStringsConfig:
+            QueryStringBehavior: none
+          EnableAcceptEncodingGzip: true
+          EnableAcceptEncodingBrotli: true
+
+  CDNDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Origins:
+          - DomainName: !GetAtt S3FrontEndBucket.RegionalDomainName
+            Id: MainFrontEndBucket
+            OriginAccessControlId: !Ref CDNOriginAccessControl
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          CachePolicyId: !Ref CachingOptimizedCachePolicy
+          Compress: true
+          TargetOriginId: MainFrontEndBucket
+          ViewerProtocolPolicy: redirect-to-https
+        DefaultRootObject: index.html
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: Three-Tier-Web-Application
+
+  ######################################
+  #         S3-hosted website          #
+  ######################################
+
+  S3FrontEndBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref FrontEndBucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: Three-Tier-Web-Application
+
+  FrontEndBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3FrontEndBucket
+      PolicyDocument:
+        Statement:
+          - Action: s3:GetObject
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Resource: !Join
+              - ''
+              - - !GetAtt S3FrontEndBucket.Arn
+                - /*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${CDNDistribution}
+
+  ######################################
+  #           VPC and subnets          #
+  ######################################
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Project
+          Value: Three-Tier-Web-Application
+
+  VPCPrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs
+          Ref: AWS::Region
+      CidrBlock: 10.0.1.0/24
+      Tags:
+        - Key: Project
+          Value: Three-Tier-Web-Application
+      VpcId: !Ref VPC
+
+  VPCPrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs
+          Ref: AWS::Region
+      CidrBlock: 10.0.2.0/24
+      Tags:
+        - Key: Project
+          Value: Three-Tier-Web-Application
+      VpcId: !Ref VPC
+
+  VPCPrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs
+          Ref: AWS::Region
+      CidrBlock: 10.0.3.0/24
+      Tags:
+        - Key: Project
+          Value: Three-Tier-Web-Application
+      VpcId: !Ref VPC
+
+  VPCPrivateSubnet4:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs
+          Ref: AWS::Region
+      CidrBlock: 10.0.4.0/24
+      Tags:
+        - Key: Project
+          Value: Three-Tier-Web-Application
+      VpcId: !Ref VPC
+
+  ######################################
+  #             API Gateway            #
+  ######################################
+
+  VPCLink:
+    Type: AWS::ApiGatewayV2::VpcLink
+    Properties:
+      Name: VPCLink
+      SubnetIds:
+        - !Ref VPCPrivateSubnet1
+        - !Ref VPCPrivateSubnet2
+      Tags:
+        Project: Three-Tier-Web-Application
+
+  API:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: API
+      ProtocolType: HTTP
+      Tags:
+        Project: Three-Tier-Web-Application
+
+  APIIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref API
+      ConnectionId: !Ref VPCLink
+      ConnectionType: VPC_LINK
+      IntegrationType: HTTP_PROXY
+      IntegrationMethod: ANY
+      IntegrationUri: !Sub http://${NetworkLoadBalancer.DNSName}
+      PayloadFormatVersion: '1.0'
+
+  APIRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref API
+      AuthorizationType: NONE
+      RouteKey: ANY /{proxy+}
+      Target: !Join
+        - /
+        - - integrations
+          - !Ref APIIntegration
+
+  ######################################
+  #       Network Load Balancer        #
+  ######################################
+
+  ELBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for the NLB
+      SecurityGroupIngress:
+        - IpProtocol: TCP
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 10.0.0.0/16
+      Tags:
+        - Key: Project
+          Value: Three-Tier-Web-Application
+      VpcId: !Ref VPC
+
+  NetworkLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      IpAddressType: ipv4
+      Name: NetworkLoadBalancer
+      Scheme: internal
+      SecurityGroups:
+        - !Ref ELBSecurityGroup
+      Subnets:
+        - !Ref VPCPrivateSubnet1
+        - !Ref VPCPrivateSubnet2
+      Tags:
+        - Key: Project
+          Value: Three-Tier-Web-Application
+      Type: network
+
+  NetworkLoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref NetworkLoadBalancerTargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref NetworkLoadBalancer
+      Port: 80
+      Protocol: TCP
+
+  NetworkLoadBalancerTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: NetworkLoadBalancerTargetGroup
+      Port: 80
+      Protocol: TCP
+      HealthCheckPort: '80'
+      HealthCheckProtocol: TCP
+      Tags:
+        - Key: Project
+          Value: Three-Tier-Web-Application
+      TargetType: instance
+      VpcId: !Ref VPC
+
+  ######################################
+  #      EC2 instances in an ASG       #
+  ######################################
+
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies: 
+        - PolicyName: EC2AuroraAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rds-db:connect
+                Resource:
+                  - !Ref AuroraCluster
+      Tags: 
+        - Key: Project
+          Value: Three-Tier-Web-Application
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2InstanceRole
+
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for the EC2 instances
+      SecurityGroupIngress:
+        - IpProtocol: TCP
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ELBSecurityGroup
+      Tags:
+        - Key: Project
+          Value: Three-Tier-Web-Application
+      VpcId: !Ref VPC
+
+  EC2LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: ami-04e8b3e527208c8cf
+        InstanceType: t2.micro
+        SecurityGroupIds:
+          - !Ref EC2SecurityGroup
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Project
+                Value: Three-Tier-Web-Application
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: EC2AutoScalingGroup
+      VPCZoneIdentifier:
+        - !Ref VPCPrivateSubnet1
+        - !Ref VPCPrivateSubnet2
+      DesiredCapacity: '2'
+      LaunchTemplate:
+        LaunchTemplateId: !Ref EC2LaunchTemplate
+        Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
+      MaxSize: '3'
+      MinSize: '1'
+      Tags:
+        - Key: Project
+          Value: Three-Tier-Web-Application
+          PropagateAtLaunch: true
+      TargetGroupARNs:
+        - !Ref NetworkLoadBalancerTargetGroup
+
+  ######################################
+  #        Amazon Aurora Cluster       #
+  ######################################
+
+  AuroraClusterMasterSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: password
+        PasswordLength: 18
+      Name: AuroraClusterMasterSecret
+      Tags:
+        - Key: Project
+          Value: Three-Tier-Web-Application
+
+  AuroraSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Aurora cluster
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+      Tags:
+        - Key: Project
+          Value: Three-Tier-Web-Application
+
+  AuroraClusterSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Aurora cluster subnet group
+      DBSubnetGroupName: AuroraClusterSubnetGroup
+      SubnetIds:
+        - !Ref VPCPrivateSubnet3
+        - !Ref VPCPrivateSubnet4
+      Tags:
+        - Key: Project
+          Value: Three-Tier-Web-Application
+
+  AuroraCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      Engine: aurora-mysql
+      EngineVersion: 8.0.mysql_aurora.3.03.0
+      DBClusterIdentifier: AuroraCluster
+      DBSubnetGroupName: !Ref AuroraClusterSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref AuroraSecurityGroup
+      MasterUserSecret:
+        SecretArn: !Ref AuroraClusterMasterSecret
+      StorageEncrypted: true
+      Tags:
+        - Key: Project
+          Value: Three-Tier-Web-Application
+
+  AuroraPrimary:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceClass: db.t3.medium
+      Engine: aurora-mysql
+      DBClusterIdentifier: !Ref AuroraCluster
+      DBInstanceIdentifier: AuroraPrimary
+      Tags:
+        - Key: Project
+          Value: Three-Tier-Web-Application
+
+  AuroraReadReplica:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceClass: db.t3.medium
+      Engine: aurora-mysql
+      DBClusterIdentifier: !Ref AuroraCluster
+      DBInstanceIdentifier: AuroraReadReplica
+      Tags:
+        - Key: Project
+          Value: Three-Tier-Web-Application
+
+Outputs:
+  S3BucketName:
+    Description: Name of the S3 bucket for the front-end website.
+    Value: !Ref S3FrontEndBucket
+
+  CloudFrontDistributionDomainName:
+    Description: CloudFront Distribution Domain Name
+    Value: !Join
+      - ''
+      - - https://
+        - !GetAtt CDNDistribution.DomainName
+
+  APIEndpoint:
+    Description: API Endpoint
+    Value: !Join
+      - ''
+      - - https://
+        - !Ref API
+        - .execute-api
+        - .localhost.localstack.cloud:4566

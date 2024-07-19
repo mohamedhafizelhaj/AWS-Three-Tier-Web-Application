@@ -52,20 +52,15 @@ aws cloudformation deploy --template-file template.yaml --stack-name My3TierWebA
 
 ## Security
 
-- **Security Groups:** EC2 instances, Network Load Balancer and Aurora database instances are secured using AWS security groups to control inbound and outbound traffic.
-- **Encryption:** Data at rest in the Aurora cluster is encrypted using AWS-managed encryption keys.
-- **IAM Policies:** IAM policies are applied to restrict access and ensure that only authorized services and users can interact with the resources.
-- **Secure Access:** An Amazon Machine Image (AMI) that supports AWS Systems Manager Session Manager is used for connecting to the EC2 instances, eliminating the need for SSH keys and thereby reducing the attack surface.
+EC2 instances, Network Load Balancer and Aurora database instances are secured using AWS security groups to control inbound and outbound traffic. Data at rest in the Aurora cluster is encrypted using AWS-managed encryption keys. IAM policies are applied to restrict access and ensure that only authorized services and users can interact with the resources. An Amazon Machine Image (AMI) that supports AWS Systems Manager Session Manager is used for connecting to the EC2 instances, eliminating the need for SSH keys and thereby reducing the attack surface.
 
 ## Operational Excellence
 
-- **Infrastructure as Code (IaC):** The usage of AWS CloudFormation for IaC adheres to best practices by providing a repeatable and automated deployment process, ensuring consistency across deployments.
-- **Logging:** Each resource is configured to log to a specific CloudWatch log group, facilitating easy monitoring and troubleshooting.
+The usage of AWS CloudFormation for IaC adheres to best practices by providing a repeatable and automated deployment process, ensuring consistency across deployments. Monitoring is provided through CloudWatch, which offers out-of-the-box metrics for services like EC2, NLB, and RDS, ensuring that critical metrics are captured without additional configuration.
 
 ## Performance Efficiency
 
-- **Auto Scaling:** EC2 instances are managed by Auto Scaling to automatically adjust capacity based on traffic patterns.
-- **Database Scaling:** Amazon Aurora allows for automatic scaling to handle varying database workloads efficiently.
+EC2 instances are managed by Auto Scaling to automatically adjust capacity based on traffic patterns, and Amazon Aurora allows for automatic scaling to handle varying database workloads efficiently.
 
 ## Cost Optimization
 

@@ -24,15 +24,15 @@ This CloudFormation template deploys a scalable and resilient 3-tier web applica
 The architecture consists of three tiers:
 
 - **Frontend (Web Tier):**
-  - Hosted on an S3 bucket (`FrontEndBucketName`).
+  - Hosted on an S3 bucket.
   - Accessible via CloudFront for optimized content delivery.
 
 - **Application Tier:**
-  - EC2 instances managed by an Auto Scaling Group (`AutoScalingGroup`).
-  - Instances configured with Apache web server and PHP for server-side scripting.
+  - EC2 instances managed by an Auto Scaling Group.
+  - Instances are launched using a Launch Template with specified instance types and security groups.
 
 - **Database Tier:**
-  - Amazon Aurora MySQL cluster (`AuroraCluster`) with a master instance (`AuroraPrimary`) and a read replica (`AuroraReadReplica`).
+  - Amazon Aurora MySQL cluster with a master instance and a read replica.
   - Secrets managed securely using AWS Secrets Manager.
 
 ## Deployment Steps
@@ -52,27 +52,25 @@ aws cloudformation deploy --template-file template.yaml --stack-name My3TierWebA
 
 ## Security
 
-- **Security Groups:** EC2 instances and Aurora database instances are secured using AWS security groups to control inbound and outbound traffic.
+- **Security Groups:** EC2 instances, Network Load Balancer and Aurora database instances are secured using AWS security groups to control inbound and outbound traffic.
 - **Encryption:** Data at rest in the Aurora cluster is encrypted using AWS-managed encryption keys.
 - **IAM Policies:** IAM policies are applied to restrict access and ensure that only authorized services and users can interact with the resources.
 - **Secure Access:** An Amazon Machine Image (AMI) that supports AWS Systems Manager Session Manager is used for connecting to the EC2 instances, eliminating the need for SSH keys and thereby reducing the attack surface.
 
 ## Operational Excellence
 
-- **Monitoring:** CloudWatch alarms are set up to monitor EC2 instance health and database performance.
-- **Logging:** Logs from EC2 instances and Aurora database are centralized in Amazon CloudWatch Logs for easy monitoring and troubleshooting.
+- **Infrastructure as Code (IaC):** The usage of AWS CloudFormation for IaC adheres to best practices by providing a repeatable and automated deployment process, ensuring consistency across deployments.
+- **Logging:** Each resource is configured to log to a specific CloudWatch log group, facilitating easy monitoring and troubleshooting.
 
 ## Performance Efficiency
 
 - **Auto Scaling:** EC2 instances are managed by Auto Scaling to automatically adjust capacity based on traffic patterns.
-- **Database Scaling:** Amazon Aurora allows for automatic scaling of read replicas to handle varying database workloads efficiently.
+- **Database Scaling:** Amazon Aurora allows for automatic scaling to handle varying database workloads efficiently.
 
 ## Cost Optimization
 
-- **Pay-as-You-Go Pricing:** Leveraging AWS services like EC2 Auto Scaling and Aurora database scaling ensures costs are optimized based on actual usage.
-- **Resource Optimization:** Use of serverless components like Lambda functions and efficient database scaling strategies minimizes idle resource costs.
+Leveraging AWS services like EC2 Auto Scaling and Aurora database scaling ensures costs are optimized based on actual usage.
 
 ## Reliability
 
-- **High Availability:** Multi-AZ deployment of Aurora ensures database availability in case of AZ failure.
-- **Fault Tolerance:** CloudFront CDN and multi-AZ deployment of EC2 instances provide fault tolerance and improved application availability.
+Multi-AZ deployment of Aurora ensures database availability in case of AZ failure, with the automatic fallback feature of Aurora.

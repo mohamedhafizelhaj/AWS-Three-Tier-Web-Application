@@ -446,3 +446,7 @@ Outputs:
         - !Ref API
         - .execute-api
         - .localhost.localstack.cloud:4566
+
+  CDNARN:
+    Description: CDN ARN
+    Value: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${CDNDistribution}

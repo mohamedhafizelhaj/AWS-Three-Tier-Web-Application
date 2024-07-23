@@ -190,7 +190,7 @@ Resources:
       ConnectionType: VPC_LINK
       IntegrationType: HTTP_PROXY
       IntegrationMethod: ANY
-      IntegrationUri: !Sub http://${NetworkLoadBalancer.DNSName}
+      IntegrationUri: !GetAtt NetworkLoadBalancerListener.ListenerArn
       PayloadFormatVersion: '1.0'
 
   APIRoute:
@@ -285,7 +285,7 @@ Resources:
                 Action:
                   - rds-db:connect
                 Resource:
-                  - !Ref AuroraCluster
+                  - !GetAtt AuroraCluster.DBClusterArn
       Tags: 
         - Key: Project
           Value: Three-Tier-Web-Application
@@ -397,6 +397,9 @@ Resources:
       DBSubnetGroupName: !Ref AuroraClusterSubnetGroup
       VpcSecurityGroupIds:
         - !Ref AuroraSecurityGroup
+      ManageMasterUserPassword: true
+      MasterUsername: admin
+      MasterUserPassword: !Ref AuroraMasterPassword
       MasterUserSecret:
         SecretArn: !Ref AuroraClusterMasterSecret
       StorageEncrypted: true
@@ -446,7 +449,3 @@ Outputs:
         - !Ref API
         - .execute-api
         - .localhost.localstack.cloud:4566
-
-  CDNARN:
-    Description: CDN ARN
-    Value: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${CDNDistribution}

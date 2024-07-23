@@ -60,11 +60,11 @@ The usage of AWS CloudFormation for IaC adheres to best practices by providing a
 
 ## Performance Efficiency
 
-EC2 instances are managed by Auto Scaling to automatically adjust capacity based on traffic patterns, and Amazon Aurora allows for automatic scaling to handle varying database workloads efficiently.
+EC2 instances are managed by Auto Scaling to automatically adjust capacity based on traffic patterns, and by an Amazon Aurora read replica we can offload read requests from the primary database, which allows the application handle more write and read queries, thereby enhancing the performance.
 
 ## Cost Optimization
 
-Leveraging AWS services like EC2 Auto Scaling and Aurora database scaling ensures costs are optimized based on actual usage.
+Leveraging AWS services like EC2 Auto Scaling ensures costs are optimized based on actual usage.
 
 ## Reliability
 
